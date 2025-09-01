@@ -1,0 +1,21 @@
+# 数据库配置
+DB_HOST=10.5.122.136
+DB_PORT=3306
+DB_USERNAME=root_tmp
+DB_PASSWORD=root_tmp
+DB_DATABASE=alert_api
+
+# 邮件配置 - 使用HTTP API方式
+EMAIL_API_URL=http://opi.kgidc.cn/mail/email/send_email.php
+EMAIL_APP_ID=v1-5f4769fe10c9c
+EMAIL_APP_SECRET=c1e271982a82e325ef8ab5b0313fd102
+EMAIL_FROM=system@company.com
+EMAIL_TO=felixgao@kugou.net
+EMAIL_DEBUG_MODE=false
+EMAIL_DEBUG_API_URL=http://10.16.2.146:6709/mail/email/send_email.php
+
+# 服务器配置
+# 开发环境: localhost (只允许本机访问)
+# 生产环境: 0.0.0.0 (允许外部访问)
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8080
