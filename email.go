@@ -48,25 +48,83 @@ func InitEmailConfig() {
 	emailConfig = config.Email
 }
 
-// SendAlertEmail 发送预警通知邮件
-func SendAlertEmail(alerts []Alert) error {
-	if len(alerts) == 0 {
+// SendAlertEmail 发送预警通知邮件（按用户分组）
+func SendAlertEmail(userAlertsList []UserAlerts) error {
+	if len(userAlertsList) == 0 {
 		return fmt.Errorf("没有预警信息需要发送")
 	}
 
+	log.Printf("开始发送邮件，共涉及 %d 个用户", len(userAlertsList))
+	
+	var successCount, failCount int
+	var successRecipients, failRecipients []string
+
+	// 为每个用户发送单独的邮件
+	for _, userAlerts := range userAlertsList {
+		recipientEmail := generateRecipientEmail(userAlerts.Recipient)
+		log.Printf("正在发送邮件给用户: %s (%s)，包含 %d 条预警信息", 
+			userAlerts.Recipient, recipientEmail, len(userAlerts.Alerts))
+		
+		if err := sendEmailToUser(userAlerts); err != nil {
+			log.Printf("❌ 发送邮件给用户 %s (%s) 失败: %v", 
+				userAlerts.Recipient, recipientEmail, err)
+			failCount++
+			failRecipients = append(failRecipients, recipientEmail)
+			continue
+		}
+		
+		log.Printf("✅ 成功发送邮件给用户: %s (%s)，包含 %d 条预警信息", 
+			userAlerts.Recipient, recipientEmail, len(userAlerts.Alerts))
+		successCount++
+		successRecipients = append(successRecipients, recipientEmail)
+	}
+
+	// 发送总结
+	log.Printf("📧 邮件发送完成:")
+	log.Printf("   ✅ 成功: %d 个用户", successCount)
+	log.Printf("   ❌ 失败: %d 个用户", failCount)
+	if len(successRecipients) > 0 {
+		log.Printf("   📬 成功收件人: %v", successRecipients)
+	}
+	if len(failRecipients) > 0 {
+		log.Printf("   📭 失败收件人: %v", failRecipients)
+	}
+
+	if failCount > 0 {
+		return fmt.Errorf("部分邮件发送失败，成功: %d，失败: %d", successCount, failCount)
+	}
+
+	return nil
+}
+
+// sendEmailToUser 发送邮件给特定用户
+func sendEmailToUser(userAlerts UserAlerts) error {
 	// 生成邮件内容
-	subject, body, err := generateEmailContent(alerts)
+	subject, body, err := generateEmailContentForUser(userAlerts)
 	if err != nil {
 		return fmt.Errorf("生成邮件内容失败: %v", err)
 	}
 
+	// 生成收件人邮箱地址
+	recipientEmail := generateRecipientEmail(userAlerts.Recipient)
+
 	// 通过HTTP API发送邮件
-	if err := sendEmailViaAPI(emailConfig.To, subject, body); err != nil {
+	if err := sendEmailViaAPI([]string{recipientEmail}, subject, body); err != nil {
 		return fmt.Errorf("发送邮件失败: %v", err)
 	}
 
-	log.Printf("成功发送预警通知邮件给 %d 个收件人", len(emailConfig.To))
 	return nil
+}
+
+// generateRecipientEmail 根据收件人变量生成邮箱地址
+func generateRecipientEmail(recipient string) string {
+	// 如果收件人已经包含@符号，直接返回
+	if strings.Contains(recipient, "@") {
+		return recipient
+	}
+	
+	// 否则添加@kugou.net后缀
+	return recipient + "@kugou.net"
 }
 
 // sendEmailViaAPI 通过HTTP API发送邮件
@@ -75,7 +133,7 @@ func sendEmailViaAPI(toUsers []string, subject, content string) error {
 	apiURL := emailConfig.APIUrl
 	if emailConfig.DebugMode && emailConfig.DebugAPIUrl != "" {
 		apiURL = emailConfig.DebugAPIUrl
-		log.Printf("使用调试模式邮件API: %s", apiURL)
+		log.Printf("🔧 使用调试模式邮件API: %s", apiURL)
 	}
 
 		// 将收件人列表转换为逗号分隔的字符串
@@ -103,12 +161,11 @@ func sendEmailViaAPI(toUsers []string, subject, content string) error {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", "Alert-System/1.0")
 
-	// 记录请求详情
-	log.Printf("发送邮件API请求:")
-	log.Printf("  URL: %s", apiURL)
-	log.Printf("  Method: %s", req.Method)
-	log.Printf("  Headers: %v", req.Header)
-	log.Printf("  Body: %s", postData)
+	// 记录请求详情（简化版，避免敏感信息泄露）
+	log.Printf("📤 发送邮件请求:")
+	log.Printf("    收件人: %s", toList)
+	log.Printf("    主题: %s", subject)
+	log.Printf("    API地址: %s", apiURL)
 
 	// 发送请求
 	client := &http.Client{
@@ -128,16 +185,15 @@ func sendEmailViaAPI(toUsers []string, subject, content string) error {
 	}
 
 	// 记录响应详情
-	log.Printf("邮件API响应:")
-	log.Printf("  Status: %s", resp.Status)
-	log.Printf("  Headers: %v", resp.Header)
-	log.Printf("  Body: %s", string(respBody))
+	log.Printf("📥 邮件API响应:")
+	log.Printf("   📊 状态码: %s", resp.Status)
+	log.Printf("   📄 响应内容: %s", string(respBody))
 
 	// 解析响应
 	var apiResp EmailAPIResponse
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
 		// 如果解析JSON失败，记录原始响应
-		log.Printf("邮件API响应解析失败，原始响应: %s", string(respBody))
+		log.Printf("⚠️ 邮件API响应解析失败，原始响应: %s", string(respBody))
 		return fmt.Errorf("解析API响应失败: %v", err)
 	}
 
@@ -151,14 +207,14 @@ func sendEmailViaAPI(toUsers []string, subject, content string) error {
 		return fmt.Errorf("邮件发送失败: code=%d, message=%s", apiResp.Code, apiResp.Message)
 	}
 
-	log.Printf("邮件发送成功: %s", apiResp.Message)
+	log.Printf("✅ 邮件发送成功: %s", apiResp.Message)
 	return nil
 }
 
-// generateEmailContent 生成邮件内容
-func generateEmailContent(alerts []Alert) (string, string, error) {
+// generateEmailContentForUser 为用户生成邮件内容
+func generateEmailContentForUser(userAlerts UserAlerts) (string, string, error) {
 	// 邮件主题
-	subject := fmt.Sprintf("预警通知汇总 - %s", time.Now().Format("2006-01-02"))
+	subject := fmt.Sprintf("预警通知 - %s - %s", userAlerts.Recipient, time.Now().Format("2006-01-02"))
 
 	// 邮件模板 - 预警通知样式
 	const emailTemplate = `
@@ -166,7 +222,7 @@ func generateEmailContent(alerts []Alert) (string, string, error) {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>预警通知汇总</title>
+    <title>预警通知</title>
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
@@ -282,30 +338,6 @@ func generateEmailContent(alerts []Alert) (string, string, error) {
             margin-bottom: 10px;
             line-height: 1.5;
         }
-        .domain-highlight {
-            background-color: #fff3cd;
-            color: #0056b3;
-            font-weight: 600;
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin: 0 4px;
-        }
-        .alert-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            font-size: 13px;
-            color: #666;
-        }
-        .detail-item {
-            display: flex;
-            align-items: center;
-        }
-        .detail-label {
-            font-weight: 600;
-            margin-right: 8px;
-            color: #555;
-        }
         .footer {
             background-color: #f8f9fa;
             padding: 20px 30px;
@@ -314,38 +346,13 @@ func generateEmailContent(alerts []Alert) (string, string, error) {
             color: #666;
             font-size: 13px;
         }
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        .status-active {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .status-resolved {
-            background-color: #d1ecf1;
-            color: #0c5460;
-        }
-        .region-badge {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            background-color: #e9ecef;
-            color: #495057;
-        }
     </style>
 </head>
 <body>
     <div class="container">
             <div class="header">
-            <h1>预警通知汇总</h1>
-            <p>生成时间: {{.GenerateTime}}</p>
+            <h1>预警通知</h1>
+            <p>收件人: {{.Recipient}} | 生成时间: {{.GenerateTime}}</p>
         </div>
     
         <div class="content">
@@ -353,8 +360,7 @@ func generateEmailContent(alerts []Alert) (string, string, error) {
                     <h3>统计摘要</h3>
         <ul>
                     <li>总预警数量: <strong>{{.TotalCount}}</strong></li>
-            <li>涉及域名数量: <strong>{{.DomainCount}}</strong></li>
-                    <li>预警来源: <strong>{{.SourceCount}}</strong> 个</li>
+                    <li>收件人: <strong>{{.Recipient}}</strong></li>
                     <li>统计时间段: {{.StartTime}} 至 {{.EndTime}}</li>
         </ul>
     </div>
@@ -372,25 +378,11 @@ func generateEmailContent(alerts []Alert) (string, string, error) {
                 </div>
                 <div class="alert-content">
                     <div class="alert-message">
-                        检测到域名<span class="domain-highlight">【{{$alert.Domain}}】</span>{{$alert.Message}}
+                        {{$alert.Message}}
                     </div>
-                    <div class="alert-details">
                         <div class="detail-item">
                             <span class="detail-label">时间:</span>
                             <span>{{$alert.AlertTime.Format "2006-01-02 15:04:05"}}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">来源:</span>
-                            <span>{{$alert.Source}}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">状态:</span>
-                            <span class="status-badge {{if eq $alert.Status "active"}}status-active{{else}}status-resolved{{end}}">{{$alert.Status}}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">区域:</span>
-                            <span class="region-badge">{{$alert.Region}}</span>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -412,35 +404,24 @@ func generateEmailContent(alerts []Alert) (string, string, error) {
 		StartTime    string
 		EndTime      string
 		TotalCount   int
-		DomainCount  int
-		SourceCount  int
+		Recipient    string
 		Alerts       []Alert
-	}
-
-	// 统计信息
-	domainSet := make(map[string]bool)
-	sourceSet := make(map[string]bool)
-	
-	for _, alert := range alerts {
-		domainSet[alert.Domain] = true
-		sourceSet[alert.Source] = true
 	}
 
 	// 确定时间范围
 	var startTime, endTime time.Time
-	if len(alerts) > 0 {
-		startTime = alerts[len(alerts)-1].AlertTime
-		endTime = alerts[0].AlertTime
+	if len(userAlerts.Alerts) > 0 {
+		startTime = userAlerts.Alerts[len(userAlerts.Alerts)-1].AlertTime
+		endTime = userAlerts.Alerts[0].AlertTime
 	}
 
 	data := TemplateData{
 		GenerateTime: time.Now().Format("2006-01-02 15:04:05"),
 		StartTime:    startTime.Format("2006-01-02 15:04:05"),
 		EndTime:      endTime.Format("2006-01-02 15:04:05"),
-		TotalCount:   len(alerts),
-		DomainCount:  len(domainSet),
-		SourceCount:  len(sourceSet),
-		Alerts:       alerts,
+		TotalCount:   len(userAlerts.Alerts),
+		Recipient:    userAlerts.Recipient,
+		Alerts:       userAlerts.Alerts,
 	}
 
 	// 解析模板

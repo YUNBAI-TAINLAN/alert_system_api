@@ -86,17 +86,13 @@ func createTable() error {
 	query := `
 	CREATE TABLE IF NOT EXISTS alerts (
 		id INT AUTO_INCREMENT PRIMARY KEY,
-		domain VARCHAR(255) NOT NULL,
 		message TEXT NOT NULL,
-		source VARCHAR(100) NOT NULL,
-		status VARCHAR(50),
-		region VARCHAR(50),
+		recipient VARCHAR(255) NOT NULL,
 		alert_time DATETIME NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		INDEX idx_alert_time (alert_time),
-		INDEX idx_domain (domain),
-		INDEX idx_source (source)
+		INDEX idx_recipient (recipient)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 	`
 	
@@ -107,11 +103,11 @@ func createTable() error {
 // InsertAlert 插入告警信息
 func InsertAlert(alert *Alert) error {
 	query := `
-	INSERT INTO alerts (domain, message, source, status, region, alert_time)
-	VALUES (?, ?, ?, ?, ?, ?)
+	INSERT INTO alerts (message, recipient, alert_time)
+	VALUES (?, ?, ?)
 	`
 	
-	result, err := db.Exec(query, alert.Domain, alert.Message, alert.Source, alert.Status, alert.Region, alert.AlertTime)
+	result, err := db.Exec(query, alert.Message, alert.Recipient, alert.AlertTime)
 	if err != nil {
 		return fmt.Errorf("插入告警信息失败: %v", err)
 	}
@@ -127,7 +123,7 @@ func InsertAlert(alert *Alert) error {
 
 // GetAlerts 获取所有告警信息
 func GetAlerts() ([]Alert, error) {
-	query := `SELECT id, domain, message, source, status, region, alert_time, created_at, updated_at FROM alerts ORDER BY alert_time DESC`
+	query := `SELECT id, message, recipient, alert_time, created_at, updated_at FROM alerts ORDER BY alert_time DESC`
 	
 	rows, err := db.Query(query)
 	if err != nil {
@@ -138,7 +134,7 @@ func GetAlerts() ([]Alert, error) {
 	var alerts []Alert
 	for rows.Next() {
 		var alert Alert
-		err := rows.Scan(&alert.ID, &alert.Domain, &alert.Message, &alert.Source, &alert.Status, &alert.Region, &alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
+		err := rows.Scan(&alert.ID, &alert.Message, &alert.Recipient, &alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("扫描告警信息失败: %v", err)
 		}
@@ -151,7 +147,7 @@ func GetAlerts() ([]Alert, error) {
 // GetAlertsByTimeRange 根据时间范围获取告警信息
 func GetAlertsByTimeRange(startTime, endTime time.Time) ([]Alert, error) {
 	query := `
-	SELECT id, domain, message, source, status, region, alert_time, created_at, updated_at 
+	SELECT id, message, recipient, alert_time, created_at, updated_at 
 	FROM alerts 
 	WHERE alert_time BETWEEN ? AND ? 
 	ORDER BY alert_time DESC
@@ -166,7 +162,63 @@ func GetAlertsByTimeRange(startTime, endTime time.Time) ([]Alert, error) {
 	var alerts []Alert
 	for rows.Next() {
 		var alert Alert
-		err := rows.Scan(&alert.ID, &alert.Domain, &alert.Message, &alert.Source, &alert.Status, &alert.Region, &alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
+		err := rows.Scan(&alert.ID, &alert.Message, &alert.Recipient, &alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("扫描告警信息失败: %v", err)
+		}
+		alerts = append(alerts, alert)
+	}
+	
+	return alerts, nil
+}
+
+// GetAlertsByRecipient 根据收件人获取告警信息
+func GetAlertsByRecipient(recipient string) ([]Alert, error) {
+	query := `
+	SELECT id, message, recipient, alert_time, created_at, updated_at 
+	FROM alerts 
+	WHERE recipient = ? 
+	ORDER BY alert_time DESC
+	`
+	
+	rows, err := db.Query(query, recipient)
+	if err != nil {
+		return nil, fmt.Errorf("查询收件人告警信息失败: %v", err)
+	}
+	defer rows.Close()
+	
+	var alerts []Alert
+	for rows.Next() {
+		var alert Alert
+		err := rows.Scan(&alert.ID, &alert.Message, &alert.Recipient, &alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("扫描告警信息失败: %v", err)
+		}
+		alerts = append(alerts, alert)
+	}
+	
+	return alerts, nil
+}
+
+// GetAlertsByTimeRangeAndRecipient 根据时间范围和收件人获取告警信息
+func GetAlertsByTimeRangeAndRecipient(startTime, endTime time.Time, recipient string) ([]Alert, error) {
+	query := `
+	SELECT id, message, recipient, alert_time, created_at, updated_at 
+	FROM alerts 
+	WHERE alert_time BETWEEN ? AND ? AND recipient = ?
+	ORDER BY alert_time DESC
+	`
+	
+	rows, err := db.Query(query, startTime, endTime, recipient)
+	if err != nil {
+		return nil, fmt.Errorf("查询时间段和收件人告警信息失败: %v", err)
+	}
+	defer rows.Close()
+	
+	var alerts []Alert
+	for rows.Next() {
+		var alert Alert
+		err := rows.Scan(&alert.ID, &alert.Message, &alert.Recipient, &alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("扫描告警信息失败: %v", err)
 		}
@@ -175,3 +227,53 @@ func GetAlertsByTimeRange(startTime, endTime time.Time) ([]Alert, error) {
 	
 	return alerts, nil
 } 
+
+// GetUniqueRecipients 获取所有唯一的收件人
+func GetUniqueRecipients() ([]string, error) {
+	query := `SELECT DISTINCT recipient FROM alerts ORDER BY recipient`
+	
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("查询唯一收件人失败: %v", err)
+	}
+	defer rows.Close()
+	
+	var recipients []string
+	for rows.Next() {
+		var recipient string
+		err := rows.Scan(&recipient)
+		if err != nil {
+			return nil, fmt.Errorf("扫描收件人失败: %v", err)
+		}
+		recipients = append(recipients, recipient)
+	}
+	
+	return recipients, nil
+}
+
+// GetAlertsGroupedByRecipient 根据时间范围获取按收件人分组的告警信息
+func GetAlertsGroupedByRecipient(startTime, endTime time.Time) ([]UserAlerts, error) {
+	// 先获取所有唯一的收件人
+	recipients, err := GetUniqueRecipients()
+	if err != nil {
+		return nil, err
+	}
+	
+	var userAlertsList []UserAlerts
+	
+	for _, recipient := range recipients {
+		alerts, err := GetAlertsByTimeRangeAndRecipient(startTime, endTime, recipient)
+		if err != nil {
+			return nil, err
+		}
+		
+		if len(alerts) > 0 {
+			userAlertsList = append(userAlertsList, UserAlerts{
+				Recipient: recipient,
+				Alerts:    alerts,
+			})
+		}
+	}
+	
+	return userAlertsList, nil
+}

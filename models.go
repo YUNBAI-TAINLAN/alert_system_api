@@ -7,11 +7,8 @@ import (
 // Alert 告警信息结构
 type Alert struct {
 	ID          int       `json:"id" db:"id"`
-	Domain      string    `json:"domain" db:"domain"`
 	Message     string    `json:"message" db:"message"`
-	Source      string    `json:"source" db:"source"`
-	Status      string    `json:"status" db:"status"`
-	Region      string    `json:"region" db:"region"`
+	Recipient   string    `json:"recipient" db:"recipient"`
 	AlertTime   time.Time `json:"alert_time" db:"alert_time"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
@@ -19,11 +16,8 @@ type Alert struct {
 
 // CreateAlertRequest 创建告警请求结构
 type CreateAlertRequest struct {
-	Domain    string `json:"domain" binding:"required"`
 	Message   string `json:"message" binding:"required"`
-	Source    string `json:"source" binding:"required"`
-	Status    string `json:"status"`
-	Region    string `json:"region"`
+	Recipient string `json:"recipient" binding:"required"` // 支持逗号分隔的多个收件人
 	AlertTime string `json:"alert_time"`
 }
 
@@ -38,4 +32,10 @@ type AlertResponse struct {
 type PeriodRequest struct {
 	StartTime string `json:"start_time" form:"start_time"`
 	EndTime   string `json:"end_time" form:"end_time"`
-} 
+}
+
+// UserAlerts 用户告警信息分组
+type UserAlerts struct {
+	Recipient string  `json:"recipient"`
+	Alerts    []Alert `json:"alerts"`
+}

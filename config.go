@@ -40,14 +40,14 @@ func LoadConfig() *Config {
 			Port:     getEnvAsInt("DB_PORT", 3306),
 			Username: getEnv("DB_USERNAME", "root"),
 			Password: getEnv("DB_PASSWORD", "password"),
-			Database: getEnv("DB_DATABASE", "alert_system"),
+			Database: getEnv("DB_DATABASE", "alert_message"),
 		},
 		Email: EmailConfig{
 			APIUrl:      getEnv("EMAIL_API_URL", "http://opi.kgidc.cn/mail/email/send_email.php"),
 			AppID:       getEnv("EMAIL_APP_ID", "v1-5f4769fe10c9c"),
 			AppSecret:   getEnv("EMAIL_APP_SECRET", "c1e271982a82e325ef8ab5b0313fd102"),
 			From:        getEnv("EMAIL_FROM", "system@company.com"),
-			To:          getEnvAsSlice("EMAIL_TO", []string{"felixgao@kugou.net"}),
+			To:          []string{}, // 不再使用固定收件人列表
 			DebugMode:   getEnvAsBool("EMAIL_DEBUG_MODE", false),
 			DebugAPIUrl: getEnv("EMAIL_DEBUG_API_URL", "http://10.16.2.146:6709/mail/email/send_email.php"),
 		},
@@ -80,8 +80,6 @@ func loadEnvFile() {
 		if len(parts) == 2 {
 			key := strings.TrimSpace(parts[0])
 			value := strings.TrimSpace(parts[1])
-			// 移除引号
-			value = strings.Trim(value, "\"'")
 			os.Setenv(key, value)
 		}
 	}
@@ -118,11 +116,12 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 // getEnvAsSlice 获取环境变量并转换为字符串切片
 func getEnvAsSlice(key string, defaultValue []string) []string {
 	if value := os.Getenv(key); value != "" {
-		// 按逗号分隔处理多个邮箱地址
-		addresses := strings.Split(value, ",")
-		result := make([]string, 0, len(addresses))
-		for _, addr := range addresses {
-			if trimmed := strings.TrimSpace(addr); trimmed != "" {
+		// 支持逗号分隔的多个值
+		parts := strings.Split(value, ",")
+		var result []string
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
 				result = append(result, trimmed)
 			}
 		}
@@ -131,4 +130,4 @@ func getEnvAsSlice(key string, defaultValue []string) []string {
 		}
 	}
 	return defaultValue
-} 
+}

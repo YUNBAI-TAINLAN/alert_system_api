@@ -59,9 +59,9 @@ func setupRoutes(r *gin.Engine) {
 				"app_id":         emailConfig.AppID,
 				"app_secret":     "***hidden***",
 				"from":           emailConfig.From,
-				"to":             emailConfig.To,
 				"debug_mode":     emailConfig.DebugMode,
 				"debug_api_url":  emailConfig.DebugAPIUrl,
+				"note":           "收件人现在根据告警信息动态生成",
 			},
 		})
 	})
@@ -72,40 +72,47 @@ func setupRoutes(r *gin.Engine) {
 		log.Printf("邮件配置信息:")
 		log.Printf("  API地址: %s", emailConfig.APIUrl)
 		log.Printf("  App ID: %s", emailConfig.AppID)
-		log.Printf("  收件人: %v", emailConfig.To)
 		log.Printf("  调试模式: %v", emailConfig.DebugMode)
 		if emailConfig.DebugMode {
 			log.Printf("  调试API地址: %s", emailConfig.DebugAPIUrl)
 		}
+		log.Printf("  收件人: 根据告警信息动态生成")
 
-		// 创建测试预警数据
-		testAlerts := []Alert{
+		// 创建测试预警数据（按用户分组）- 所有收件人都是felixgao
+		testUserAlerts := []UserAlerts{
+			{
+				Recipient: "felixgao",
+				Alerts: []Alert{
 			{
 				ID:        1,
-				Domain:    "search.suggest.kgidc.cn",
-				Message:   "北方已切量,但南方超过24小时未切量,请检查",
-				Source:    "RPC后台",
-				Status:    "active",
-				Region:    "全国",
+						Message:   "检测到域名【search.suggest.kgidc.cn】北方已切量，但南方超过24小时未切量，请检查",
+						Recipient: "felixgao",
 				AlertTime: time.Now().Add(-30 * time.Minute),
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			},
 			{
 				ID:        2,
-				Domain:    "api.example.com",
-				Message:   "服务响应时间超过阈值，当前响应时间2.5秒",
-				Source:    "监控系统",
-				Status:    "active",
-				Region:    "华东",
+						Message:   "检测到域名【api.example.com】服务响应时间超过阈值，当前响应时间2.5秒",
+						Recipient: "felixgao",
 				AlertTime: time.Now().Add(-15 * time.Minute),
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
+					},
+					{
+						ID:        3,
+						Message:   "检测到域名【cdn.kugou.com】CDN节点异常，影响用户访问",
+						Recipient: "felixgao",
+						AlertTime: time.Now().Add(-20 * time.Minute),
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+				},
 			},
 		}
 
 		// 发送测试邮件
-		if err := SendAlertEmail(testAlerts); err != nil {
+		if err := SendAlertEmail(testUserAlerts); err != nil {
 			log.Printf("邮件发送失败: %v", err)
 			c.JSON(500, gin.H{
 				"code":    500,
@@ -114,11 +121,11 @@ func setupRoutes(r *gin.Engine) {
 			return
 		}
 
-		log.Printf("测试邮件发送成功，收件人: %v", emailConfig.To)
+		log.Printf("测试邮件发送成功，收件人根据告警信息动态生成")
 		c.JSON(200, gin.H{
 			"code":    200,
 			"message": "测试邮件发送成功",
-			"data":    gin.H{"alert_count": len(testAlerts), "recipients": emailConfig.To},
+			"data":    gin.H{"user_count": len(testUserAlerts), "total_alerts": 3, "recipient": "felixgao@kugou.net"},
 		})
 	})
 
@@ -133,6 +140,9 @@ func setupRoutes(r *gin.Engine) {
 		
 		// 获取指定时间段的预警信息
 		api.GET("/alerts/period", GetAlertsByPeriod)
+		
+		// 根据收件人获取预警信息
+		api.GET("/alerts/recipient", GetAlertsByRecipientHandler)
 	}
 }
 
@@ -148,22 +158,23 @@ func startCronJob() {
 		startTime := time.Date(now.Year(), now.Month(), now.Day(), 19, 0, 0, 0, now.Location()) // 当天晚上7点
 		endTime := time.Date(now.Year(), now.Month(), now.Day(), 22, 0, 0, 0, now.Location())   // 当天晚上10点
 		
-		alerts, err := GetAlertsByTimeRange(startTime, endTime)
+		// 按收件人分组获取告警信息
+		userAlertsList, err := GetAlertsGroupedByRecipient(startTime, endTime)
 		if err != nil {
 			log.Printf("获取预警信息失败: %v", err)
 			return
 		}
 		
-		if len(alerts) == 0 {
+		if len(userAlertsList) == 0 {
 			log.Println("指定时间段内没有预警信息")
 			return
 		}
 		
-		// 发送邮件
-		if err := SendAlertEmail(alerts); err != nil {
+		// 按用户分组发送邮件
+		if err := SendAlertEmail(userAlertsList); err != nil {
 			log.Printf("发送邮件失败: %v", err)
 		} else {
-			log.Printf("成功发送预警通知邮件，包含 %d 条预警信息", len(alerts))
+			log.Printf("成功发送预警通知邮件，涉及 %d 个用户", len(userAlertsList))
 		}
 	})
 	

@@ -1,8 +1,9 @@
-package main
+﻿package main
 
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -35,30 +36,62 @@ func CreateAlert(c *gin.Context) {
 		alertTime = time.Now()
 	}
 
-	// 创建预警对象
-	alert := &Alert{
-		Domain:    req.Domain,
-		Message:   req.Message,
-		Source:    req.Source,
-		Status:    req.Status,
-		Region:    req.Region,
-		AlertTime: alertTime,
-	}
-
-	// 插入数据库
-	if err := InsertAlert(alert); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": "存储预警信息失败: " + err.Error(),
+	// 解析收件人列表（支持逗号分隔）
+	recipients := parseRecipients(req.Recipient)
+	if len(recipients) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "收件人不能为空",
 		})
 		return
+	}
+
+	// 为每个收件人创建告警记录
+	var createdAlerts []Alert
+	for _, recipient := range recipients {
+		alert := &Alert{
+			Message:   req.Message,
+			Recipient: recipient,
+			AlertTime: alertTime,
+		}
+
+		// 插入数据库
+		if err := InsertAlert(alert); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "存储预警信息失败: " + err.Error(),
+			})
+			return
+		}
+
+		createdAlerts = append(createdAlerts, *alert)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "预警信息创建成功",
-		"data":    alert,
+		"data":    createdAlerts,
+		"count":   len(createdAlerts),
 	})
+}
+
+// parseRecipients 解析收件人字符串，支持逗号分隔
+func parseRecipients(recipientStr string) []string {
+	// 支持中文逗号和英文逗号
+	recipientStr = strings.ReplaceAll(recipientStr, "，", ",")
+	
+	// 按逗号分割
+	parts := strings.Split(recipientStr, ",")
+	var recipients []string
+	
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			recipients = append(recipients, trimmed)
+		}
+	}
+	
+	return recipients
 }
 
 // GetAlertsHandler 获取所有预警信息
@@ -166,4 +199,33 @@ func GetAlertsByPeriod(c *gin.Context) {
 		"end_time":   endTime.Format("2006-01-02 15:04:05"),
 		"total":     len(alerts),
 	})
-} 
+}
+
+// GetAlertsByRecipientHandler 根据收件人获取预警信息
+func GetAlertsByRecipientHandler(c *gin.Context) {
+	recipient := c.Query("recipient")
+	if recipient == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "收件人参数不能为空",
+		})
+		return
+	}
+
+	alerts, err := GetAlertsByRecipient(recipient)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取预警信息失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"message":   "获取预警信息成功",
+		"data":      alerts,
+		"recipient": recipient,
+		"total":     len(alerts),
+	})
+}

@@ -10,7 +10,6 @@ EMAIL_API_URL=http://opi.kgidc.cn/mail/email/send_email.php
 EMAIL_APP_ID=v1-5f4769fe10c9c
 EMAIL_APP_SECRET=c1e271982a82e325ef8ab5b0313fd102
 EMAIL_FROM=system@company.com
-EMAIL_TO=felixgao@kugou.net
 EMAIL_DEBUG_MODE=false
 EMAIL_DEBUG_API_URL=http://10.16.2.146:6709/mail/email/send_email.php
 
