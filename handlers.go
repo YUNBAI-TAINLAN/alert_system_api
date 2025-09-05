@@ -7,12 +7,17 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 // CreateAlert 创建预警信息
 func CreateAlert(c *gin.Context) {
 	var req CreateAlertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		LogSystem(logrus.WarnLevel, "handler", "创建告警请求参数错误", map[string]interface{}{
+			"error": err.Error(),
+			"client_ip": c.ClientIP(),
+		})
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"message": "请求参数错误: " + err.Error(),
@@ -20,12 +25,23 @@ func CreateAlert(c *gin.Context) {
 		return
 	}
 
+	LogSystem(logrus.InfoLevel, "handler", "收到创建告警请求", map[string]interface{}{
+		"message": req.Message,
+		"recipient": req.Recipient,
+		"alert_time": req.AlertTime,
+		"client_ip": c.ClientIP(),
+	})
+
 	// 解析预警时间
 	var alertTime time.Time
 	var err error
 	if req.AlertTime != "" {
 		alertTime, err = time.Parse("2006-01-02 15:04:05", req.AlertTime)
 		if err != nil {
+			LogSystem(logrus.WarnLevel, "handler", "告警时间格式错误", map[string]interface{}{
+				"alert_time": req.AlertTime,
+				"error": err.Error(),
+			})
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":    400,
 				"message": "预警时间格式错误，请使用 YYYY-MM-DD HH:mm:ss 格式",
@@ -39,6 +55,9 @@ func CreateAlert(c *gin.Context) {
 	// 解析收件人列表（支持逗号分隔）
 	recipients := parseRecipients(req.Recipient)
 	if len(recipients) == 0 {
+		LogSystem(logrus.WarnLevel, "handler", "收件人为空", map[string]interface{}{
+			"recipient_input": req.Recipient,
+		})
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"message": "收件人不能为空",
@@ -57,6 +76,7 @@ func CreateAlert(c *gin.Context) {
 
 		// 插入数据库
 		if err := InsertAlert(alert); err != nil {
+			LogAlert("create", 0, recipient, req.Message, false, err.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    500,
 				"message": "存储预警信息失败: " + err.Error(),
@@ -64,8 +84,14 @@ func CreateAlert(c *gin.Context) {
 			return
 		}
 
+		LogAlert("create", int64(alert.ID), recipient, req.Message, true, "")
 		createdAlerts = append(createdAlerts, *alert)
 	}
+
+	LogSystem(logrus.InfoLevel, "handler", "告警创建成功", map[string]interface{}{
+		"alert_count": len(createdAlerts),
+		"recipients": recipients,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,

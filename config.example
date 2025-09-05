@@ -18,3 +18,12 @@ EMAIL_DEBUG_API_URL=http://10.16.2.146:6709/mail/email/send_email.php
 # 生产环境: 0.0.0.0 (允许外部访问)
 SERVER_HOST=0.0.0.0
 SERVER_PORT=8080
+
+# 日志配置
+LOG_LEVEL=info
+LOG_FILE_PATH=./logs/alert_system.log
+LOG_MAX_SIZE=100
+LOG_MAX_BACKUPS=10
+LOG_MAX_AGE=30
+LOG_COMPRESS=true
+LOG_CONSOLE=true

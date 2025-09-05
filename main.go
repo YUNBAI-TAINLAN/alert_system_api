@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
+	"github.com/sirupsen/logrus"
 )
 
 var config *Config
@@ -15,20 +16,38 @@ func main() {
 	// 加载配置
 	config = LoadConfig()
 
+	// 初始化日志系统
+	if err := InitLogger(config.Log); err != nil {
+		log.Fatal("日志系统初始化失败:", err)
+	}
+	
+	LogSystem(logrus.InfoLevel, "main", "告警系统启动", map[string]interface{}{
+		"version": "1.0.0",
+	})
+
 	// 初始化数据库连接
 	if err := InitDB(); err != nil {
+		LogSystem(logrus.FatalLevel, "main", "数据库初始化失败", map[string]interface{}{
+			"error": err.Error(),
+		})
 		log.Fatal("数据库初始化失败:", err)
 	}
 	defer CloseDB()
+	
+	LogSystem(logrus.InfoLevel, "main", "数据库连接成功", nil)
 
 	// 初始化邮件配置
 	InitEmailConfig()
+	LogSystem(logrus.InfoLevel, "main", "邮件配置初始化完成", nil)
 
 	// 设置Gin模式
 	gin.SetMode(gin.ReleaseMode)
 
 	// 创建Gin路由
 	r := gin.Default()
+	
+	// 添加日志中间件
+	r.Use(LoggerMiddleware())
 
 	// 设置路由
 	setupRoutes(r)
@@ -38,8 +57,14 @@ func main() {
 
 	// 启动HTTP服务器
 	serverAddr := fmt.Sprintf("%s:%s", config.Server.Host, config.Server.Port)
+	LogSystem(logrus.InfoLevel, "main", "服务器启动", map[string]interface{}{
+		"address": serverAddr,
+	})
 	log.Printf("服务器启动在 %s...", serverAddr)
 	if err := r.Run(serverAddr); err != nil {
+		LogSystem(logrus.FatalLevel, "main", "服务器启动失败", map[string]interface{}{
+			"error": err.Error(),
+		})
 		log.Fatal("服务器启动失败:", err)
 	}
 }
@@ -151,37 +176,82 @@ func startCronJob() {
 	
 	// 每天晚上10点执行定时任务
 	_, err := c.AddFunc("0 22 * * *", func() {
-		log.Println("开始执行定时任务...")
+		startTime := time.Now()
+		LogCronJob("alert_notification", true, "定时任务开始执行", "")
 		
 		// 获取当天晚上7点到10点的预警信息
 		now := time.Now()
-		startTime := time.Date(now.Year(), now.Month(), now.Day(), 19, 0, 0, 0, now.Location()) // 当天晚上7点
-		endTime := time.Date(now.Year(), now.Month(), now.Day(), 22, 0, 0, 0, now.Location())   // 当天晚上10点
+		alertStartTime := time.Date(now.Year(), now.Month(), now.Day(), 19, 0, 0, 0, now.Location()) // 当天晚上7点
+		alertEndTime := time.Date(now.Year(), now.Month(), now.Day(), 22, 0, 0, 0, now.Location())   // 当天晚上10点
+		
+		LogSystem(logrus.InfoLevel, "cron", "查询告警时间范围", map[string]interface{}{
+			"start_time": alertStartTime.Format("2006-01-02 15:04:05"),
+			"end_time": alertEndTime.Format("2006-01-02 15:04:05"),
+		})
 		
 		// 按收件人分组获取告警信息
-		userAlertsList, err := GetAlertsGroupedByRecipient(startTime, endTime)
+		userAlertsList, err := GetAlertsGroupedByRecipient(alertStartTime, alertEndTime)
 		if err != nil {
+			duration := time.Since(startTime).String()
+			LogCronJob("alert_notification", false, "获取预警信息失败: "+err.Error(), duration)
 			log.Printf("获取预警信息失败: %v", err)
 			return
 		}
 		
 		if len(userAlertsList) == 0 {
+			duration := time.Since(startTime).String()
+			LogCronJob("alert_notification", true, "指定时间段内没有预警信息", duration)
 			log.Println("指定时间段内没有预警信息")
 			return
 		}
 		
+		LogSystem(logrus.InfoLevel, "cron", "准备发送邮件", map[string]interface{}{
+			"user_count": len(userAlertsList),
+		})
+		
 		// 按用户分组发送邮件
 		if err := SendAlertEmail(userAlertsList); err != nil {
+			duration := time.Since(startTime).String()
+			LogCronJob("alert_notification", false, "发送邮件失败: "+err.Error(), duration)
 			log.Printf("发送邮件失败: %v", err)
 		} else {
+			duration := time.Since(startTime).String()
+			LogCronJob("alert_notification", true, fmt.Sprintf("成功发送预警通知邮件，涉及 %d 个用户", len(userAlertsList)), duration)
 			log.Printf("成功发送预警通知邮件，涉及 %d 个用户", len(userAlertsList))
 		}
 	})
 	
 	if err != nil {
+		LogSystem(logrus.FatalLevel, "cron", "添加定时任务失败", map[string]interface{}{
+			"error": err.Error(),
+		})
 		log.Fatal("添加定时任务失败:", err)
 	}
 	
 	c.Start()
+	LogSystem(logrus.InfoLevel, "cron", "定时任务已启动，将在每天晚上10点执行", nil)
 	log.Println("定时任务已启动，将在每天晚上10点执行")
+}
+
+// LoggerMiddleware Gin日志中间件
+func LoggerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		
+		// 处理请求
+		c.Next()
+		
+		// 计算处理时间
+		latency := time.Since(start)
+		
+		// 记录请求日志
+		LogRequest(
+			c.Request.Method,
+			c.Request.URL.Path,
+			c.ClientIP(),
+			c.Request.UserAgent(),
+			c.Writer.Status(),
+			latency.String(),
+		)
+	}
 } 

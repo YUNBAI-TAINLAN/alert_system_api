@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -102,6 +103,11 @@ func createTable() error {
 
 // InsertAlert 插入告警信息
 func InsertAlert(alert *Alert) error {
+	LogSystem(logrus.InfoLevel, "database", "准备插入告警信息", map[string]interface{}{
+		"recipient": alert.Recipient,
+		"message": alert.Message,
+	})
+	
 	query := `
 	INSERT INTO alerts (message, recipient, alert_time)
 	VALUES (?, ?, ?)
@@ -109,24 +115,30 @@ func InsertAlert(alert *Alert) error {
 	
 	result, err := db.Exec(query, alert.Message, alert.Recipient, alert.AlertTime)
 	if err != nil {
+		LogDatabase("INSERT", "alerts", false, err.Error(), 0)
 		return fmt.Errorf("插入告警信息失败: %v", err)
 	}
 	
 	id, err := result.LastInsertId()
 	if err != nil {
+		LogDatabase("INSERT", "alerts", false, err.Error(), 0)
 		return fmt.Errorf("获取插入ID失败: %v", err)
 	}
 	
 	alert.ID = int(id)
+	LogDatabase("INSERT", "alerts", true, "", 1)
 	return nil
 }
 
 // GetAlerts 获取所有告警信息
 func GetAlerts() ([]Alert, error) {
+	LogSystem(logrus.InfoLevel, "database", "查询所有告警信息", nil)
+	
 	query := `SELECT id, message, recipient, alert_time, created_at, updated_at FROM alerts ORDER BY alert_time DESC`
 	
 	rows, err := db.Query(query)
 	if err != nil {
+		LogDatabase("SELECT", "alerts", false, err.Error(), 0)
 		return nil, fmt.Errorf("查询告警信息失败: %v", err)
 	}
 	defer rows.Close()
@@ -134,18 +146,26 @@ func GetAlerts() ([]Alert, error) {
 	var alerts []Alert
 	for rows.Next() {
 		var alert Alert
-		err := rows.Scan(&alert.ID, &alert.Message, &alert.Recipient, &alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
+		err := rows.Scan(&alert.ID, &alert.Message, &alert.Recipient, 
+			&alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
 		if err != nil {
+			LogDatabase("SELECT", "alerts", false, err.Error(), 0)
 			return nil, fmt.Errorf("扫描告警信息失败: %v", err)
 		}
 		alerts = append(alerts, alert)
 	}
 	
+	LogDatabase("SELECT", "alerts", true, "", int64(len(alerts)))
 	return alerts, nil
 }
 
 // GetAlertsByTimeRange 根据时间范围获取告警信息
 func GetAlertsByTimeRange(startTime, endTime time.Time) ([]Alert, error) {
+	LogSystem(logrus.InfoLevel, "database", "查询时间段告警信息", map[string]interface{}{
+		"start_time": startTime.Format("2006-01-02 15:04:05"),
+		"end_time": endTime.Format("2006-01-02 15:04:05"),
+	})
+	
 	query := `
 	SELECT id, message, recipient, alert_time, created_at, updated_at 
 	FROM alerts 
@@ -155,6 +175,7 @@ func GetAlertsByTimeRange(startTime, endTime time.Time) ([]Alert, error) {
 	
 	rows, err := db.Query(query, startTime, endTime)
 	if err != nil {
+		LogDatabase("SELECT", "alerts", false, err.Error(), 0)
 		return nil, fmt.Errorf("查询时间段告警信息失败: %v", err)
 	}
 	defer rows.Close()
@@ -162,13 +183,16 @@ func GetAlertsByTimeRange(startTime, endTime time.Time) ([]Alert, error) {
 	var alerts []Alert
 	for rows.Next() {
 		var alert Alert
-		err := rows.Scan(&alert.ID, &alert.Message, &alert.Recipient, &alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
+		err := rows.Scan(&alert.ID, &alert.Message, &alert.Recipient, 
+			&alert.AlertTime, &alert.CreatedAt, &alert.UpdatedAt)
 		if err != nil {
-			return nil, fmt.Errorf("扫描告警信息失败: %v", err)
+			LogDatabase("SELECT", "alerts", false, err.Error(), 0)
+			return nil, fmt.Errorf("扫描时间段告警信息失败: %v", err)
 		}
 		alerts = append(alerts, alert)
 	}
 	
+	LogDatabase("SELECT", "alerts", true, "", int64(len(alerts)))
 	return alerts, nil
 }
 
@@ -253,9 +277,15 @@ func GetUniqueRecipients() ([]string, error) {
 
 // GetAlertsGroupedByRecipient 根据时间范围获取按收件人分组的告警信息
 func GetAlertsGroupedByRecipient(startTime, endTime time.Time) ([]UserAlerts, error) {
+	LogSystem(logrus.InfoLevel, "database", "查询按收件人分组的告警信息", map[string]interface{}{
+		"start_time": startTime.Format("2006-01-02 15:04:05"),
+		"end_time": endTime.Format("2006-01-02 15:04:05"),
+	})
+	
 	// 先获取所有唯一的收件人
 	recipients, err := GetUniqueRecipients()
 	if err != nil {
+		LogDatabase("SELECT", "alerts", false, err.Error(), 0)
 		return nil, err
 	}
 	
@@ -264,6 +294,7 @@ func GetAlertsGroupedByRecipient(startTime, endTime time.Time) ([]UserAlerts, er
 	for _, recipient := range recipients {
 		alerts, err := GetAlertsByTimeRangeAndRecipient(startTime, endTime, recipient)
 		if err != nil {
+			LogDatabase("SELECT", "alerts", false, err.Error(), 0)
 			return nil, err
 		}
 		
@@ -275,5 +306,17 @@ func GetAlertsGroupedByRecipient(startTime, endTime time.Time) ([]UserAlerts, er
 		}
 	}
 	
+	LogSystem(logrus.InfoLevel, "database", "按收件人分组查询完成", map[string]interface{}{
+		"total_recipients": len(recipients),
+		"active_recipients": len(userAlertsList),
+		"total_alerts": func() int {
+			total := 0
+			for _, ua := range userAlertsList {
+				total += len(ua.Alerts)
+			}
+			return total
+		}(),
+	})
+	
 	return userAlertsList, nil
-}
+} 

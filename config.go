@@ -12,6 +12,7 @@ type Config struct {
 	Database DatabaseConfig
 	Email    EmailConfig
 	Server   ServerConfig
+	Log      LogConfig
 }
 
 // DatabaseConfig 数据库配置
@@ -54,6 +55,15 @@ func LoadConfig() *Config {
 		Server: ServerConfig{
 			Host: getEnv("SERVER_HOST", "0.0.0.0"),
 			Port: getEnv("SERVER_PORT", "8080"),
+		},
+		Log: LogConfig{
+			Level:      getEnv("LOG_LEVEL", "info"),
+			FilePath:   getEnv("LOG_FILE_PATH", "./logs/alert_system.log"),
+			MaxSize:    getEnvAsInt("LOG_MAX_SIZE", 100),    // 100MB
+			MaxBackups: getEnvAsInt("LOG_MAX_BACKUPS", 10),  // 保留10个文件
+			MaxAge:     getEnvAsInt("LOG_MAX_AGE", 30),      // 保留30天
+			Compress:   getEnvAsBool("LOG_COMPRESS", true),  // 压缩旧文件
+			Console:    getEnvAsBool("LOG_CONSOLE", true),   // 同时输出到控制台
 		},
 	}
 	

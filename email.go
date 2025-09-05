@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	
+	"github.com/sirupsen/logrus"
 )
 
 // EmailConfig 邮件配置
@@ -51,10 +53,13 @@ func InitEmailConfig() {
 // SendAlertEmail 发送预警通知邮件（按用户分组）
 func SendAlertEmail(userAlertsList []UserAlerts) error {
 	if len(userAlertsList) == 0 {
+		LogSystem(logrus.WarnLevel, "email", "没有预警信息需要发送", nil)
 		return fmt.Errorf("没有预警信息需要发送")
 	}
 
-	log.Printf("开始发送邮件，共涉及 %d 个用户", len(userAlertsList))
+	LogSystem(logrus.InfoLevel, "email", "开始发送邮件", map[string]interface{}{
+		"user_count": len(userAlertsList),
+	})
 	
 	var successCount, failCount int
 	var successRecipients, failRecipients []string
@@ -62,10 +67,15 @@ func SendAlertEmail(userAlertsList []UserAlerts) error {
 	// 为每个用户发送单独的邮件
 	for _, userAlerts := range userAlertsList {
 		recipientEmail := generateRecipientEmail(userAlerts.Recipient)
-		log.Printf("正在发送邮件给用户: %s (%s)，包含 %d 条预警信息", 
-			userAlerts.Recipient, recipientEmail, len(userAlerts.Alerts))
+		
+		LogSystem(logrus.InfoLevel, "email", "准备发送用户邮件", map[string]interface{}{
+			"recipient": userAlerts.Recipient,
+			"email": recipientEmail,
+			"alert_count": len(userAlerts.Alerts),
+		})
 		
 		if err := sendEmailToUser(userAlerts); err != nil {
+			LogEmail(recipientEmail, "告警通知", false, err.Error())
 			log.Printf("❌ 发送邮件给用户 %s (%s) 失败: %v", 
 				userAlerts.Recipient, recipientEmail, err)
 			failCount++
@@ -73,11 +83,21 @@ func SendAlertEmail(userAlertsList []UserAlerts) error {
 			continue
 		}
 		
+		LogEmail(recipientEmail, "告警通知", true, "")
 		log.Printf("✅ 成功发送邮件给用户: %s (%s)，包含 %d 条预警信息", 
 			userAlerts.Recipient, recipientEmail, len(userAlerts.Alerts))
 		successCount++
 		successRecipients = append(successRecipients, recipientEmail)
 	}
+
+	// 记录发送总结
+	LogSystem(logrus.InfoLevel, "email", "邮件发送完成", map[string]interface{}{
+		"total_users": len(userAlertsList),
+		"success_count": successCount,
+		"fail_count": failCount,
+		"success_recipients": successRecipients,
+		"fail_recipients": failRecipients,
+	})
 
 	// 发送总结
 	log.Printf("📧 邮件发送完成:")
