@@ -68,21 +68,21 @@ func CreateAlert(c *gin.Context) {
 	// 为每个收件人创建告警记录
 	var createdAlerts []Alert
 	for _, recipient := range recipients {
-		alert := &Alert{
-			Message:   req.Message,
+	alert := &Alert{
+		Message:   req.Message,
 			Recipient: recipient,
-			AlertTime: alertTime,
-		}
+		AlertTime: alertTime,
+	}
 
-		// 插入数据库
-		if err := InsertAlert(alert); err != nil {
+	// 插入数据库
+	if err := InsertAlert(alert); err != nil {
 			LogAlert("create", 0, recipient, req.Message, false, err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code":    500,
-				"message": "存储预警信息失败: " + err.Error(),
-			})
-			return
-		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "存储预警信息失败: " + err.Error(),
+		})
+		return
+	}
 
 		LogAlert("create", int64(alert.ID), recipient, req.Message, true, "")
 		createdAlerts = append(createdAlerts, *alert)
@@ -225,7 +225,7 @@ func GetAlertsByPeriod(c *gin.Context) {
 		"end_time":   endTime.Format("2006-01-02 15:04:05"),
 		"total":     len(alerts),
 	})
-}
+} 
 
 // GetAlertsByRecipientHandler 根据收件人获取预警信息
 func GetAlertsByRecipientHandler(c *gin.Context) {

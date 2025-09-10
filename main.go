@@ -88,6 +88,13 @@ func setupRoutes(r *gin.Engine) {
 				"debug_api_url":  emailConfig.DebugAPIUrl,
 				"note":           "收件人现在根据告警信息动态生成",
 			},
+			"cron_config": gin.H{
+				"enabled":      config.Cron.Enabled,
+				"schedule":     config.Cron.Schedule,
+				"start_time":   fmt.Sprintf("%02d:%02d", config.Cron.StartHour, config.Cron.StartMinute),
+				"end_time":     fmt.Sprintf("%02d:%02d", config.Cron.EndHour, config.Cron.EndMinute),
+				"description":  "定时任务配置信息",
+			},
 		})
 	})
 
@@ -103,32 +110,79 @@ func setupRoutes(r *gin.Engine) {
 		}
 		log.Printf("  收件人: 根据告警信息动态生成")
 
-		// 创建测试预警数据（按用户分组）- 所有收件人都是felixgao
+		// 创建测试预警数据（按用户分组），包含多个用户
 		testUserAlerts := []UserAlerts{
 			{
 				Recipient: "felixgao",
 				Alerts: []Alert{
-			{
-				ID:        1,
+					{
+						ID:        1,
 						Message:   "检测到域名【search.suggest.kgidc.cn】北方已切量，但南方超过24小时未切量，请检查",
 						Recipient: "felixgao",
-				AlertTime: time.Now().Add(-30 * time.Minute),
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
-			},
-			{
-				ID:        2,
+						AlertTime: time.Now().Add(-30 * time.Minute),
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+					{
+						ID:        2,
 						Message:   "检测到域名【api.example.com】服务响应时间超过阈值，当前响应时间2.5秒",
 						Recipient: "felixgao",
-				AlertTime: time.Now().Add(-15 * time.Minute),
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
+						AlertTime: time.Now().Add(-15 * time.Minute),
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
 					},
+				},
+			},
+			{
+				Recipient: "hugoli",
+				Alerts: []Alert{
 					{
 						ID:        3,
 						Message:   "检测到域名【cdn.kugou.com】CDN节点异常，影响用户访问",
-						Recipient: "felixgao",
+						Recipient: "hugoli",
 						AlertTime: time.Now().Add(-20 * time.Minute),
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+					{
+						ID:        4,
+						Message:   "检测到数据库连接池使用率超过80%，请检查数据库性能",
+						Recipient: "hugoli",
+						AlertTime: time.Now().Add(-10 * time.Minute),
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+				},
+			},
+			{
+				Recipient: "zhangsan",
+				Alerts: []Alert{
+					{
+						ID:        5,
+						Message:   "检测到服务器CPU使用率超过90%，请检查系统负载",
+						Recipient: "zhangsan",
+						AlertTime: time.Now().Add(-25 * time.Minute),
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+				},
+			},
+			{
+				Recipient: "lisi",
+				Alerts: []Alert{
+					{
+						ID:        6,
+						Message:   "检测到内存使用率超过85%，请检查内存泄漏",
+						Recipient: "lisi",
+						AlertTime: time.Now().Add(-5 * time.Minute),
+						CreatedAt: time.Now(),
+						UpdatedAt: time.Now(),
+					},
+					{
+						ID:        7,
+						Message:   "检测到磁盘空间不足，剩余空间小于10%",
+						Recipient: "lisi",
+						AlertTime: time.Now().Add(-2 * time.Minute),
 						CreatedAt: time.Now(),
 						UpdatedAt: time.Now(),
 					},
@@ -146,11 +200,27 @@ func setupRoutes(r *gin.Engine) {
 			return
 		}
 
-		log.Printf("测试邮件发送成功，收件人根据告警信息动态生成")
+		// 计算总告警数量
+		totalAlerts := 0
+		for _, userAlerts := range testUserAlerts {
+			totalAlerts += len(userAlerts.Alerts)
+		}
+
+		log.Printf("测试邮件发送成功，共发送给 %d 个用户，总计 %d 条告警信息", len(testUserAlerts), totalAlerts)
 		c.JSON(200, gin.H{
 			"code":    200,
 			"message": "测试邮件发送成功",
-			"data":    gin.H{"user_count": len(testUserAlerts), "total_alerts": 3, "recipient": "felixgao@kugou.net"},
+			"data": gin.H{
+				"user_count":   len(testUserAlerts),
+				"total_alerts": totalAlerts,
+				"recipients":   []string{"felixgao", "hugoli", "zhangsan", "lisi"},
+				"details": []gin.H{
+					{"user": "felixgao", "alert_count": 2},
+					{"user": "hugoli", "alert_count": 2},
+					{"user": "zhangsan", "alert_count": 1},
+					{"user": "lisi", "alert_count": 2},
+				},
+			},
 		})
 	})
 
@@ -172,21 +242,31 @@ func setupRoutes(r *gin.Engine) {
 }
 
 func startCronJob() {
+	// 检查是否启用定时任务
+	if !config.Cron.Enabled {
+		LogSystem(logrus.InfoLevel, "cron", "定时任务已禁用", nil)
+		log.Println("定时任务已禁用")
+		return
+	}
+
 	c := cron.New(cron.WithLocation(time.Local))
 	
-	// 每天晚上10点执行定时任务
-	_, err := c.AddFunc("0 22 * * *", func() {
+	// 使用配置的cron表达式执行定时任务
+	_, err := c.AddFunc(config.Cron.Schedule, func() {
 		startTime := time.Now()
 		LogCronJob("alert_notification", true, "定时任务开始执行", "")
 		
-		// 获取当天晚上7点到10点的预警信息
+		// 使用配置的时间范围获取预警信息
 		now := time.Now()
-		alertStartTime := time.Date(now.Year(), now.Month(), now.Day(), 19, 0, 0, 0, now.Location()) // 当天晚上7点
-		alertEndTime := time.Date(now.Year(), now.Month(), now.Day(), 22, 0, 0, 0, now.Location())   // 当天晚上10点
+		alertStartTime := time.Date(now.Year(), now.Month(), now.Day(), 
+			config.Cron.StartHour, config.Cron.StartMinute, 0, 0, now.Location())
+		alertEndTime := time.Date(now.Year(), now.Month(), now.Day(), 
+			config.Cron.EndHour, config.Cron.EndMinute, 0, 0, now.Location())
 		
 		LogSystem(logrus.InfoLevel, "cron", "查询告警时间范围", map[string]interface{}{
 			"start_time": alertStartTime.Format("2006-01-02 15:04:05"),
 			"end_time": alertEndTime.Format("2006-01-02 15:04:05"),
+			"schedule": config.Cron.Schedule,
 		})
 		
 		// 按收件人分组获取告警信息
@@ -224,13 +304,21 @@ func startCronJob() {
 	if err != nil {
 		LogSystem(logrus.FatalLevel, "cron", "添加定时任务失败", map[string]interface{}{
 			"error": err.Error(),
+			"schedule": config.Cron.Schedule,
 		})
 		log.Fatal("添加定时任务失败:", err)
 	}
 	
 	c.Start()
-	LogSystem(logrus.InfoLevel, "cron", "定时任务已启动，将在每天晚上10点执行", nil)
-	log.Println("定时任务已启动，将在每天晚上10点执行")
+	LogSystem(logrus.InfoLevel, "cron", "定时任务已启动", map[string]interface{}{
+		"schedule": config.Cron.Schedule,
+		"start_time": fmt.Sprintf("%02d:%02d", config.Cron.StartHour, config.Cron.StartMinute),
+		"end_time": fmt.Sprintf("%02d:%02d", config.Cron.EndHour, config.Cron.EndMinute),
+	})
+	log.Printf("定时任务已启动，执行时间: %s，查询范围: %02d:%02d - %02d:%02d", 
+		config.Cron.Schedule, 
+		config.Cron.StartHour, config.Cron.StartMinute,
+		config.Cron.EndHour, config.Cron.EndMinute)
 }
 
 // LoggerMiddleware Gin日志中间件
@@ -255,3 +343,4 @@ func LoggerMiddleware() gin.HandlerFunc {
 		)
 	}
 } 
+

@@ -11,6 +11,9 @@
 - 📊 **查询统计**：支持按时间段查询预警信息
 - 👥 **用户分组**：支持按收件人分组发送告警信息
 - 🔗 **动态收件人**：根据告警信息中的收件人变量自动生成邮箱地址
+- 📋 **用户列表管理**：从userlist.json文件加载用户信息，支持英文名到邮箱地址的映射
+- 🎨 **管理员邮件**：当用户未找到时，自动发送合并邮件给管理员
+- 🎨 **美观邮件模板**：HTML格式邮件，支持中文显示，不显示技术性ID信息
 
 ## 系统架构
 
@@ -171,12 +174,16 @@ POST /test-email
 
 系统会根据告警信息中的 `recipient` 字段自动生成邮箱地址：
 
-- 如果 `recipient` 已经包含 `@` 符号，直接使用
-- 否则自动添加 `@kugou.net` 后缀
+1. **用户列表匹配**：首先在 `userlist.json` 中查找对应的英文名
+2. **邮箱地址生成**：
+   - 如果 `recipient` 已经包含 `@` 符号，直接使用
+   - 否则自动添加 `@kugou.net` 后缀
+3. **管理员邮件**：当用户未找到时，发送合并邮件给管理员（liyongchang@kugou.net）
 
 例如：
 - `recipient: "zhangsan"` → 邮箱：`zhangsan@kugou.net`
 - `recipient: "lisi@company.com"` → 邮箱：`lisi@company.com`
+- `recipient: "unknownuser"` → 发送给管理员：`liyongchang@kugou.net`
 
 ### 邮件模板
 
@@ -186,6 +193,13 @@ POST /test-email
 - 告警统计摘要
 - 详细的告警信息列表
 - 美观的HTML格式
+
+#### 管理员邮件
+当用户未找到时，管理员（liyongchang@kugou.net）会收到包含所有未找到用户告警信息的合并邮件，内容包括：
+
+- 未找到用户列表
+- 所有相关告警信息
+- 处理建议
 
 ## 测试
 

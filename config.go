@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"bufio"
@@ -13,6 +13,7 @@ type Config struct {
 	Email    EmailConfig
 	Server   ServerConfig
 	Log      LogConfig
+	Cron     CronConfig
 }
 
 // DatabaseConfig 数据库配置
@@ -28,6 +29,16 @@ type DatabaseConfig struct {
 type ServerConfig struct {
 	Host string
 	Port string
+}
+
+// CronConfig 定时任务配置
+type CronConfig struct {
+	Schedule     string // cron表达式，默认 "0 22 * * *" (每天晚上10点)
+	StartHour    int    // 查询开始时间（小时），默认 19 (晚上7点)
+	StartMinute  int    // 查询开始时间（分钟），默认 0
+	EndHour      int    // 查询结束时间（小时），默认 22 (晚上10点)
+	EndMinute    int    // 查询结束时间（分钟），默认 0
+	Enabled      bool   // 是否启用定时任务，默认 true
 }
 
 // LoadConfig 加载配置
@@ -64,6 +75,14 @@ func LoadConfig() *Config {
 			MaxAge:     getEnvAsInt("LOG_MAX_AGE", 30),      // 保留30天
 			Compress:   getEnvAsBool("LOG_COMPRESS", true),  // 压缩旧文件
 			Console:    getEnvAsBool("LOG_CONSOLE", true),   // 同时输出到控制台
+		},
+		Cron: CronConfig{
+			Schedule:    getEnv("CRON_SCHEDULE", "0 22 * * *"),     // 每天晚上10点执行
+			StartHour:   getEnvAsInt("CRON_START_HOUR", 19),        // 查询开始时间：晚上7点
+			StartMinute: getEnvAsInt("CRON_START_MINUTE", 0),       // 查询开始分钟：0分
+			EndHour:     getEnvAsInt("CRON_END_HOUR", 22),          // 查询结束时间：晚上10点
+			EndMinute:   getEnvAsInt("CRON_END_MINUTE", 0),         // 查询结束分钟：0分
+			Enabled:     getEnvAsBool("CRON_ENABLED", true),        // 是否启用定时任务
 		},
 	}
 	

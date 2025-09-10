@@ -27,3 +27,22 @@ LOG_MAX_BACKUPS=10
 LOG_MAX_AGE=30
 LOG_COMPRESS=true
 LOG_CONSOLE=true
+
+# 定时任务配置
+# cron表达式格式: 分 时 日 月 周
+# 示例: "0 22 * * *" 表示每天晚上10点执行
+# 示例: "0 9,18 * * *" 表示每天早上9点和晚上6点执行
+# 示例: "0 */2 * * *" 表示每2小时执行一次
+CRON_SCHEDULE=0 22 * * *
+
+# 查询时间范围配置（24小时制）
+# 查询开始时间：晚上7点
+CRON_START_HOUR=19
+CRON_START_MINUTE=0
+
+# 查询结束时间：晚上10点
+CRON_END_HOUR=22
+CRON_END_MINUTE=0
+
+# 是否启用定时任务
+CRON_ENABLED=true

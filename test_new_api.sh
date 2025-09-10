@@ -16,49 +16,17 @@ curl -s "$BASE_URL/health"
 echo ""
 echo ""
 
-# 测试创建告警信息（新格式）- 单个收件人
+# 测试创建告警信息（新格式）- 多个收件人
 echo "2️⃣ 测试创建告警信息（单个收件人）..."
 curl -s -X POST "$BASE_URL/api/v1/alerts" \
   -H "Content-Type: application/json" \
   -d '{
     "message": "检测到域名【search.suggest.kgidc.cn】北方已切量，但南方超过24小时未切量，请检查",
-    "recipient": "felixgao"
+    "recipient": "felixgao,zhangsan,lisi"
   }'
 echo ""
 echo ""
 
-# 测试创建告警信息（新格式）- 多个收件人（英文逗号）
-echo "3️⃣ 测试创建告警信息（多个收件人-英文逗号）..."
-curl -s -X POST "$BASE_URL/api/v1/alerts" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "检测到域名【api.example.com】响应时间超过5秒",
-    "recipient": "zhangsan,lisi"
-  }'
-echo ""
-echo ""
-
-# 测试创建告警信息（新格式）- 多个收件人（中文逗号）
-echo "4️⃣ 测试创建告警信息（多个收件人-中文逗号）..."
-curl -s -X POST "$BASE_URL/api/v1/alerts" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "检测到域名【web.example.com】连接数达到上限",
-    "recipient": "wangwu，maliu"
-  }'
-echo ""
-echo ""
-
-# 测试创建告警信息（新格式）- 多个收件人（混合逗号）
-echo "5️⃣ 测试创建告警信息（多个收件人-混合逗号）..."
-curl -s -X POST "$BASE_URL/api/v1/alerts" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "检测到域名【cdn.kugou.com】CDN节点异常",
-    "recipient": "qianqi，sunba,zhoujiu"
-  }'
-echo ""
-echo ""
 
 echo "✅ 创建了多条测试数据，包含单个和多个收件人"
 echo ""
