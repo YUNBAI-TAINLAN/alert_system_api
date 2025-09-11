@@ -1,21 +1,19 @@
 # 预警系统 API
 
-这是一个用Go语言开发的预警信息管理系统，支持接收预警信息、定时统计和邮件通知功能。
+一个基于Go语言开发的企业级预警信息管理系统，提供完整的告警信息接收、存储、统计和邮件通知功能。
 
-## 功能特性
+## ✨ 核心特性
 
-- 🔔 **预警信息接收**：通过HTTP API接口接收和存储预警信息
-- ⏰ **定时统计**：每天晚上10点自动统计当天晚上7点到10点的预警信息
-- 📧 **邮件通知**：将统计结果通过邮件发送给相关人员
-- 🗄️ **数据持久化**：使用MySQL数据库存储预警信息
-- 📊 **查询统计**：支持按时间段查询预警信息
-- 👥 **用户分组**：支持按收件人分组发送告警信息
-- 🔗 **动态收件人**：根据告警信息中的收件人变量自动生成邮箱地址
-- 📋 **用户列表管理**：从userlist.json文件加载用户信息，支持英文名到邮箱地址的映射
-- 🎨 **管理员邮件**：当用户未找到时，自动发送合并邮件给管理员
-- 🎨 **美观邮件模板**：HTML格式邮件，支持中文显示，不显示技术性ID信息
+- 🔔 **高性能API**：基于Gin框架，支持高并发请求处理
+- ⏰ **智能统计**：自动按时间段统计告警信息
+- 📧 **智能邮件**：动态收件人生成，支持用户分组发送
+- 🗄️ **数据持久化**：MySQL数据库存储，支持复杂查询
+- ⏰ **定时任务**：Cron定时器，自动执行统计和邮件发送
+- 👥 **用户管理**：支持用户列表管理，英文名到邮箱映射
+- 🎨 **美观界面**：HTML邮件模板，支持中文显示
+- 🔗 **灵活配置**：环境变量配置，支持调试模式
 
-## 系统架构
+## 🏗️ 系统架构
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -35,10 +33,99 @@
                    │  (HTTP API)  │
                    └─────────────┘
 ```
+<code_block_to_apply_changes_from>
+alert_system_api/
+├── main.go              # 主程序入口
+├── config.go            # 配置管理
+├── database.go          # 数据库操作
+├── handlers.go          # API处理器
+├── models.go            # 数据模型
+├── email.go             # 邮件服务
+├── logger.go            # 日志系统
+├── init.sql             # 数据库初始化脚本
+├── migration.sql        # 数据库迁移脚本
+├── userlist.json        # 用户列表
+├── config.example       # 配置文件示例
+├── test_new_api.sh      # 测试脚本
+└── README.md            # 项目文档
+```
 
-## 数据模型
+## 🎛️ 配置说明
 
-### 告警信息结构（简化版）
+### 环境变量
+
+| 变量名 | 描述 | 默认值 |
+|--------|------|--------|
+| `DB_HOST` | 数据库主机 | localhost |
+| `DB_PORT` | 数据库端口 | 3306 |
+| `DB_USERNAME` | 数据库用户名 | root |
+| `DB_PASSWORD` | 数据库密码 | - |
+| `DB_DATABASE` | 数据库名称 | alert_system |
+| `EMAIL_API_URL` | 邮件API地址 | - |
+| `EMAIL_APP_ID` | 邮件服务App ID | - |
+| `EMAIL_APP_SECRET` | 邮件服务App Secret | - |
+| `SERVER_HOST` | 服务器监听地址 | 0.0.0.0 |
+| `SERVER_PORT` | 服务器端口 | 8080 |
+
+### 用户列表配置
+
+`userlist.json` 文件格式：
+
+```json
+[
+  {
+    "name": "张三",
+    "e_name": "zhangsan",
+    "email": "zhangsan@kugou.net"
+  }
+]
+```
+
+## 🐛 故障排除
+
+### 常见问题
+
+1. **数据库连接失败**
+   - 检查数据库服务是否运行
+   - 验证连接配置和权限
+   - 查看日志中的详细错误信息
+
+2. **邮件发送失败**
+   - 检查邮件API配置
+   - 验证App ID和App Secret
+   - 确认网络连接正常
+
+3. **定时任务不执行**
+   - 检查系统时间设置
+   - 查看日志中的定时任务状态
+   - 验证Cron表达式配置
+
+### 日志查看
+
+系统使用结构化日志，包含以下信息：
+
+- 数据库操作记录
+- 邮件发送状态
+- 定时任务执行情况
+- API请求处理日志
+
+## 🤝 贡献
+
+欢迎提交Issue和Pull Request来改进这个项目。
+
+## 📄 许可证
+
+MIT License
+
+---
+
+**版本**: v1.0.0  
+**作者**: 架构一组
+**最后更新**: 2025年9月11日
+
+##  数据模型
+
+### 告警信息结构
 
 ```json
 {
@@ -53,16 +140,23 @@
 
 **字段说明：**
 - `message`: 告警信息内容（必填）
-- `recipient`: 收件人标识（必填，系统会自动添加@kugou.net后缀）
+- `recipient`: 收件人标识（必填，支持以下格式：完整邮箱地址、英文名、或系统会自动在用户列表中查找对应邮箱）
 - `alert_time`: 告警时间（可选，默认为当前时间）
 
-## 快速开始
+## 🚀 快速开始
 
-### 1. 环境要求
+### 环境要求
 
 - Go 1.21+
 - MySQL 5.7+
-- 支持SMTP的邮箱服务
+- 支持HTTP API的邮件服务
+
+### 1. 克隆项目
+
+```bash
+git clone <repository-url>
+cd alert_system_api
+```
 
 ### 2. 安装依赖
 
@@ -70,9 +164,9 @@
 go mod download
 ```
 
-### 3. 配置环境变量
+### 3. 配置环境
 
-复制配置文件示例：
+复制配置文件：
 
 ```bash
 cp config.example .env
@@ -101,16 +195,10 @@ SERVER_HOST=0.0.0.0
 SERVER_PORT=8080
 ```
 
-### 4. 数据库初始化
+### 4. 初始化数据库
 
-#### 新安装
 ```bash
 mysql -u root -p < init.sql
-```
-
-#### 从旧版本升级
-```bash
-mysql -u root -p < migration.sql
 ```
 
 ### 5. 启动服务
@@ -121,89 +209,97 @@ go run .
 
 服务将在 `http://localhost:8080` 启动。
 
-## API 接口
+## 📚 API 接口
 
-### 1. 创建告警信息
+### 基础接口
 
-```bash
-POST /api/v1/alerts
-Content-Type: application/json
+| 接口 | 方法 | 描述 |
+|------|------|------|
+| `/health` | GET | 健康检查 |
+| `/config` | GET | 查看配置信息 |
 
-{
-  "message": "检测到域名【search.suggest.kgidc.cn】北方已切量，但南方超过24小时未切量，请检查",
-  "recipient": "zhangsan",
-  "alert_time": "2025-01-15 19:30:00"
-}
-```
+### 告警管理
 
-### 2. 获取告警信息
+| 接口 | 方法 | 描述 |
+|------|------|------|
+| `/api/v1/alerts` | POST | 创建告警信息 |
+| `/api/v1/alerts` | GET | 获取告警列表（分页） |
+| `/api/v1/alerts/recipient` | GET | 按收件人查询 |
+| `/api/v1/alerts/period` | GET | 按时间段查询 |
 
-```bash
-GET /api/v1/alerts?page=1&page_size=20
-```
+### 测试接口
 
-### 3. 按收件人查询告警
+| 接口 | 方法 | 描述 |
+|------|------|------|
+| `/test-email` | POST | 测试邮件发送功能 |
 
-```bash
-GET /api/v1/alerts/recipient?recipient=zhangsan
-```
+### 请求示例
 
-### 4. 按时间段查询告警
-
-```bash
-GET /api/v1/alerts/period?start_time=2025-01-15 19:00:00&end_time=2025-01-15 22:00:00
-```
-
-### 5. 测试邮件发送
+#### 创建告警信息
 
 ```bash
-POST /test-email
+curl -X POST http://localhost:8080/api/v1/alerts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "检测到域名【search.suggest.kgidc.cn】北方已切量，但南方超过24小时未切量，请检查",
+    "recipient": "zhangsan"
+  }'
 ```
 
-## 定时任务
+#### 获取告警列表
 
-系统每天晚上10点自动执行以下任务：
+```bash
+curl "http://localhost:8080/api/v1/alerts?page=1&page_size=20"
+```
 
-1. 获取当天晚上7点到10点的告警信息
-2. 按收件人分组
-3. 为每个收件人发送单独的邮件通知
+#### 按收件人查询
 
-## 邮件功能
+```bash
+curl "http://localhost:8080/api/v1/alerts/recipient?recipient=zhangsan"
+```
 
-### 动态收件人
+#### 按时间段查询
 
-系统会根据告警信息中的 `recipient` 字段自动生成邮箱地址：
+```bash
+curl "http://localhost:8080/api/v1/alerts/period?start_time=2025-01-15%2019:00:00&end_time=2025-01-15%2022:00:00"
+```
 
-1. **用户列表匹配**：首先在 `userlist.json` 中查找对应的英文名
-2. **邮箱地址生成**：
-   - 如果 `recipient` 已经包含 `@` 符号，直接使用
-   - 否则自动添加 `@kugou.net` 后缀
-3. **管理员邮件**：当用户未找到时，发送合并邮件给管理员（liyongchang@kugou.net）
+## ⏰ 定时任务
 
-例如：
-- `recipient: "zhangsan"` → 邮箱：`zhangsan@kugou.net`
-- `recipient: "lisi@company.com"` → 邮箱：`lisi@company.com`
-- `recipient: "unknownuser"` → 发送给管理员：`liyongchang@kugou.net`
+系统配置了以下定时任务：
+
+- **执行时间**：每天晚上10点
+- **统计范围**：当天晚上7点到10点的告警信息
+- **处理流程**：
+  1. 获取指定时间段的告警信息
+  2. 按收件人分组
+  3. 为每个收件人发送专属邮件
+  4. 未找到用户发送给管理员
+
+## 📧 邮件功能
+
+### 动态收件人生成
+
+系统智能处理收件人信息：
+
+1. **完整邮箱地址**：如果recipient包含@符号，直接使用该邮箱地址
+2. **用户列表匹配**：如果recipient不包含@符号，在 `userlist.json` 中查找对应英文名获取邮箱
+3. **管理员兜底**：未找到用户时发送给 `liyongchang@kugou.net`
+
+**处理示例：**
+- `recipient: "zhangsan@company.com"` → 直接使用：`zhangsan@company.com`
+- `recipient: "zhangsan"` → 查找用户列表：`zhangsan@kugou.net`（如果用户存在）
+- `recipient: "unknownuser"` → 管理员兜底：`liyongchang@kugou.net`
 
 ### 邮件模板
 
-每个用户会收到包含其专属告警信息的邮件，邮件内容包括：
+- **用户邮件**：包含专属告警信息，美观的HTML格式
+- **管理员邮件**：包含所有未找到用户的告警信息
+- **中文支持**：完美支持中文显示，无乱码问题
 
-- 收件人信息
-- 告警统计摘要
-- 详细的告警信息列表
-- 美观的HTML格式
+## 🧪 测试
 
-#### 管理员邮件
-当用户未找到时，管理员（liyongchang@kugou.net）会收到包含所有未找到用户告警信息的合并邮件，内容包括：
-
-- 未找到用户列表
-- 所有相关告警信息
-- 处理建议
-
-## 测试
-
-### 运行测试脚本
+### 自动化测试
 
 ```bash
 # 给脚本执行权限
@@ -215,68 +311,29 @@ chmod +x test_new_api.sh
 
 ### 手动测试
 
-1. 创建告警信息：
 ```bash
-curl -X POST http://localhost:8080/api/v1/alerts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "检测到域名【search.suggest.kgidc.cn】北方已切量，但南方超过24小时未切量，请检查",
-    "recipient": "zhangsan"
-  }'
-```
-
-2. 测试邮件发送：
-```bash
+# 测试邮件发送
 curl -X POST http://localhost:8080/test-email
+
+# 健康检查
+curl http://localhost:8080/health
 ```
 
-## 版本更新
+## 📁 项目结构
 
-### v2.0.0 更新内容
-
-1. **简化数据模型**：只保留 `message` 和 `recipient` 字段
-2. **动态收件人**：根据告警信息自动生成邮箱地址
-3. **用户分组**：按收件人分组发送告警信息
-4. **优化邮件模板**：为每个用户生成专属邮件
-
-### 从旧版本升级
-
-1. 备份现有数据
-2. 运行数据库迁移脚本：`mysql -u root -p < migration.sql`
-3. 更新代码并重启服务
-
-## 故障排除
-
-### 常见问题
-
-1. **数据库连接失败**
-   - 检查数据库配置
-   - 确保MySQL服务正在运行
-   - 验证用户名和密码
-
-2. **邮件发送失败**
-   - 检查邮件API配置
-   - 验证App ID和App Secret
-   - 查看日志中的详细错误信息
-
-3. **定时任务不执行**
-   - 检查系统时间
-   - 查看日志中的定时任务状态
-   - 验证Cron表达式
-
-### 日志查看
-
-服务日志会显示详细的执行信息，包括：
-
-- 数据库操作
-- 邮件发送状态
-- 定时任务执行情况
-- API请求处理
-
-## 贡献
-
-欢迎提交Issue和Pull Request来改进这个项目。
-
-## 许可证
-
-MIT License 
+```
+alert_system_api/
+├── main.go              # 主程序入口
+├── config.go            # 配置管理
+├── database.go          # 数据库操作
+├── handlers.go          # API处理器
+├── models.go            # 数据模型
+├── email.go             # 邮件服务
+├── logger.go            # 日志系统
+├── init.sql             # 数据库初始化脚本
+├── migration.sql        # 数据库迁移脚本
+├── userlist.json        # 用户列表
+├── config.example       # 配置文件示例
+├── test_new_api.sh      # 测试脚本
+└── README.md            # 项目文档
+``` 
